@@ -5,79 +5,53 @@
 set -e
 set -u
 
-NUMFILES=10
-WRITESTR=AELD_IS_FUN
-WRITEDIR=/tmp/aeld-data
-username=$(cat conf/username.txt)
+NUMFILES_DEFAULT=10
+WRITESTR_DEFAULT="AELD_IS_FUN"
+WRITEDIR_BASE="/tmp/aeld-data"
 
-if [ $# -lt 3 ]
-then
-	echo "Using default value ${WRITESTR} for string to write"
-	if [ $# -lt 1 ]
-	then
-		echo "Using default value ${NUMFILES} for number of files to write"
-	else
-		NUMFILES=$1
-	fi	
-else
-	NUMFILES=$1
-	WRITESTR=$2
-	WRITEDIR=/tmp/aeld-data/$3
-fi
+CONF_DIR="/etc/finder-app/conf"
+USERNAME_FILE="${CONF_DIR}/username.txt"
+ASSIGNMENT_FILE="${CONF_DIR}/assignment.txt"
 
-MATCHSTR="The number of files are ${NUMFILES} and the number of matching lines are ${NUMFILES}"
+NUMFILES="${NUMFILES_DEFAULT}"
+WRITESTR="${WRITESTR_DEFAULT}"
+WRITEDIR="${WRITEDIR_BASE}"
 
-echo "Writing ${NUMFILES} files containing string ${WRITESTR} to ${WRITEDIR}"
+# Optional args:
+#   $1 = NUMFILES
+#   $2 = WRITESTR
+#   $3 = subdirectory name under /tmp/aeld-data (e.g., username)
+if [ $# -ge 1 ]; then NUMFILES="$1"; fi
+if [ $# -ge 2 ]; then WRITESTR="$2"; fi
+if [ $# -ge 3 ]; then WRITEDIR="${WRITEDIR_BASE}/$3"; fi
+
+username="$(cat "${USERNAME_FILE}")"
+assignment="$(cat "${ASSIGNMENT_FILE}")"
+
+echo "User: ${username}"
+echo "Assignment: ${assignment}"
+echo "Writing ${NUMFILES} files containing '${WRITESTR}' to ${WRITEDIR}"
 
 rm -rf "${WRITEDIR}"
+mkdir -p "${WRITEDIR}"
 
-# create $WRITEDIR if not assignment1
-assignment=`cat ../conf/assignment.txt`
-
-if [ $assignment != 'assignment1' ]
-then
-	mkdir -p "$WRITEDIR"
-
-	#The WRITEDIR is in quotes because if the directory path consists of spaces, then variable substitution will consider it as multiple argument.
-	#The quotes signify that the entire string in WRITEDIR is a single string.
-	#This issue can also be resolved by using double square brackets i.e [[ ]] instead of using quotes.
-	if [ -d "$WRITEDIR" ]
-	then
-		echo "$WRITEDIR created"
-	else
-		exit 1
-	fi
-fi
-echo "Removing the old writer utility and compiling as a native application"
-#make clean
-#make
-
-
-if [ $? -eq 0 ]; then
-	echo "success"
-	exit 0
-else
-	echo "failed to build the writer C application"
-	exit 1
-fi
-
-for i in $( seq 1 $NUMFILES)
-do
-	#./writer.sh "$WRITEDIR/${username}$i.txt" "$WRITESTR"
-	./writer "$WRITEDIR/${username}$i.txt" "$WRITESTR"
+i=1
+while [ "${i}" -le "${NUMFILES}" ]; do
+  writer "${WRITEDIR}/${i}.txt" "${WRITESTR}"
+  i=$((i+1))
 done
 
-OUTPUTSTRING=$(./finder.sh "$WRITEDIR" "$WRITESTR")
+# Run finder and capture output (required by assignment)
+RESULT="$(finder.sh "${WRITEDIR}" "${WRITESTR}")"
+echo "${RESULT}" > /tmp/assignment4-result.txt
+echo "${RESULT}"
 
-# remove temporary directories
-rm -rf /tmp/aeld-data
-
-set +e
-echo ${OUTPUTSTRING} | grep "${MATCHSTR}"
-if [ $? -eq 0 ]; then
-	echo "success"
-	exit 0
-else
-	echo "failed: expected  ${MATCHSTR} in ${OUTPUTSTRING} but instead found"
-	exit 1
+EXPECTED="The number of files are ${NUMFILES} and the number of matching lines are ${NUMFILES}"
+if [ "${RESULT}" != "${EXPECTED}" ]; then
+  echo "ERROR: Unexpected finder output"
+  echo "Expected: ${EXPECTED}"
+  echo "Got:      ${RESULT}"
+  exit 1
 fi
+
+echo "PASS"
